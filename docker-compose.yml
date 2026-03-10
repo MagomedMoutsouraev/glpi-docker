@@ -1,0 +1,67 @@
+version: '3.8'
+
+# mon projet glpi avec docker compose
+
+services:
+
+  # service base de donnees
+  db:
+    image: mariadb:10.11
+    container_name: glpi_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      # pour garder les donnees meme si on arrete le conteneur
+      - db_data:/var/lib/mysql
+    networks:
+      - glpi_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # service glpi
+  glpi:
+    image: diouxx/glpi
+    container_name: glpi_app
+    ports:
+      - "8080:80"
+    environment:
+      TIMEZONE: Europe/Paris
+    volumes:
+      - glpi_files:/var/www/html/glpi/files
+      - glpi_plugins:/var/www/html/glpi/plugins
+      - glpi_config:/var/www/html/glpi/config
+    depends_on:
+      # glpi attend que la bdd soit prete
+      db:
+        condition: service_healthy
+    networks:
+      - glpi_network
+    restart: unless-stopped
+
+  # adminer pour gerer la bdd depuis le navigateur (bonus)
+  adminer:
+    image: adminer
+    container_name: glpi_adminer
+    ports:
+      - "8081:8080"
+    networks:
+      - glpi_network
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  glpi_files:
+  glpi_plugins:
+  glpi_config:
+
+networks:
+  glpi_network:
+    driver: bridge
